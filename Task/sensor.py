@@ -55,21 +55,21 @@ class Camera:
 
     def get_frame(self, s):
         """Get the latest camera frame.
-        Webots streams grayscale (1 byte/pixel).
-        Converts to 3-channel BGR so all OpenCV code works unchanged.
+        Webots camera stream is RGB (3 bytes/pixel).
+        Converts to BGR so OpenCV display conventions remain unchanged.
         """
         # 1. Read Header (4 bytes: Width, Height)
         header_data = self._recv_all(s, 4)
         if not header_data: return None
         width, height = struct.unpack("=HH", header_data)
 
-        # 2. Read grayscale image data (1 byte per pixel)
-        img_data = self._recv_all(s, width * height)
+        # 2. Read RGB image data (3 bytes per pixel)
+        img_data = self._recv_all(s, width * height * 3)
         if not img_data: return None
 
-        # Convert grayscale → BGR so existing OpenCV pipelines need no changes
-        gray = np.frombuffer(img_data, dtype=np.uint8).reshape((height, width))
-        frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        # Convert RGB -> BGR for OpenCV
+        rgb = np.frombuffer(img_data, dtype=np.uint8).reshape((height, width, 3))
+        frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
         return frame
 
 

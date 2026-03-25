@@ -74,7 +74,7 @@ class WebotsArduVehicle():
             gps_name (str, optional): Webots GPS name. Defaults to "gps".
             camera_name (str, optional): Webots camera name. Defaults to None.
             camera_fps (int, optional): Camera FPS. Lower FPS runs better in sim. Defaults to 10.
-            camera_stream_port (int, optional): Port to stream grayscale camera images to.
+            camera_stream_port (int, optional): Port to stream RGB camera images to.
                                                 If no port is supplied the camera will not be streamed. Defaults to None.
             rangefinder_name (str, optional): Webots RangeFinder name. Defaults to None.
             rangefinder_fps (int, optional): RangeFinder FPS. Lower FPS runs better in sim. Defaults to 10.
@@ -268,7 +268,7 @@ class WebotsArduVehicle():
             m.setVelocity(linearized_motor_commands[i] * min(m.getMaxVelocity(), self.motor_velocity_cap))
 
     def _handle_image_stream(self, camera: Union[Camera, RangeFinder], port: int):
-        """Stream grayscale images over TCP
+        """Stream camera/rangefinder images over TCP
 
         Args:
             camera (Camera or RangeFinder): the camera to get images from
@@ -314,7 +314,7 @@ class WebotsArduVehicle():
 
                     # get image
                     if isinstance(camera, Camera):
-                        img = self.get_camera_gray_image()  # grayscale, shape (H, W)
+                        img = self.get_camera_image()  # RGB, shape (H, W, 3)
                     elif isinstance(camera, RangeFinder):
                         img = self.get_rangefinder_image()
 
@@ -352,7 +352,8 @@ class WebotsArduVehicle():
         """Get the RGB image from the camera as a numpy array of bytes"""
         img = self.camera.getImage()
         img = np.frombuffer(img, np.uint8).reshape((self.camera.getHeight(), self.camera.getWidth(), 4))
-        return img[:, :, :3] # RGB only, no Alpha
+        # Webots camera bytes are BGRA; convert to RGB and drop alpha.
+        return img[:, :, [2, 1, 0]]
 
     def get_rangefinder_image(self, use_int16: bool = False) -> np.ndarray:
         """Get the rangefinder depth image as a numpy array of int8 or int16"""\
