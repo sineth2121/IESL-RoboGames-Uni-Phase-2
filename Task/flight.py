@@ -514,9 +514,8 @@ class Brain:
 
     # ── main sequence ────────────────────────────────────────────────────────
     def start(self):
-        """Force arm → takeoff → line1 → tag1: turn 90° CW → line2 → tag2: land"""
-        print("MAVLink connected. Starting flight sequence...")
-        tag_ids = []  # collect detected AprilTag IDs
+        """Take off, confirm camera feed, hold for 10 seconds, then land."""
+        print("MAVLink connected. Starting simplified flight sequence...")
 
         # 1. Set GUIDED mode
         self.control.set_mode('GUIDED')
@@ -524,10 +523,11 @@ class Brain:
         # 2. Force arm
         self.control.force_arm()
 
-        # 3. Takeoff to 2.2 m — wider FOV for larger/more stable line centroid
-        self.control.takeoff(2.2)
+        # 3. Takeoff
+        target_alt_m = 2.2
+        self.control.takeoff(target_alt_m)
 
-        # 4. Start camera
+        # 4. Start camera and wait for first frame
         cv2.namedWindow('Drone Camera', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Drone Camera', 640, 480)
         self.camera.start_thread(self.process_frame)
@@ -535,49 +535,20 @@ class Brain:
         while self._latest_frame is None:
             time.sleep(0.05)
 
-        # 5. Phase 1 — follow line until first AprilTag is close enough
-        print("=== Phase 1: following line to first AprilTag ===")
-        tag1_id = self.line_follow(duration=120, forward_speed=0.20, land_on_tag=False)
+        print("Camera feed received. Landing in 10 seconds...")
 
-        if tag1_id is not None:
-            tag_ids.append(tag1_id)
-            print(f"=== Phase 1 complete: detected AprilTag ID={tag1_id} ===")
+        # 5. Keep preview active for 10 seconds before landing
+        land_at = time.time() + 10.0
+        while time.time() < land_at:
+            frame = self._latest_display if self._latest_display is not None else self._latest_frame
+            if frame is not None:
+                self._push_display(frame.copy())
+            time.sleep(0.03)
 
-            # 6. Turn 90° clockwise
-            print("=== Turning 90° clockwise ===")
-            self.control.turn_yaw(90)
-            time.sleep(1.0)   # settle after turn
-
-            # 7. Reset PID for fresh start on new line
-            self._reset_pid()
-
-            # 8. Phase 2 — follow next line to second AprilTag, then land
-            print("=== Phase 2: following line to second AprilTag ===")
-            tag2_id = self.line_follow(duration=120, forward_speed=0.20,
-                                       land_on_tag=True, tag_ignore_secs=10)
-            if tag2_id is not None:
-                tag_ids.append(tag2_id)
-                print(f"=== Phase 2 complete: detected AprilTag ID={tag2_id} ===")
-        else:
-            print("Timed out on phase 1 without finding tag — landing.")
-
-        # 9. Land
+        # 6. Land
         self.control.land()
-        print("Flight sequence complete.")
+        print("Landing command sent. Flight sequence complete.")
         cv2.destroyAllWindows()
-
-        # ── Print detected AprilTag IDs ──────────────────────────────────
-        print("")
-        print("=" * 50)
-        print("  DETECTED APRILTAG IDs")
-        print("=" * 50)
-        if len(tag_ids) >= 1:
-            print(f"  Tag 1 (phase 1):  ID = {tag_ids[0]}")
-        if len(tag_ids) >= 2:
-            print(f"  Tag 2 (phase 2):  ID = {tag_ids[1]}")
-        if not tag_ids:
-            print("  No tags detected.")
-        print("=" * 50)
 
     def __del__(self):
         """Destructor to ensure threads are stopped."""

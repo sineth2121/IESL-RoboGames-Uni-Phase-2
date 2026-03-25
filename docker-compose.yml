@@ -26,7 +26,7 @@ services:
     environment:
       - USER=${USER}
       # Connect to Webots extern controller port 1234 on the host machine
-      - WEBOTS_CONTROLLER_URL=tcp://host.docker.internal:1234/Iris
+      - WEBOTS_CONTROLLER_URL=${WEBOTS_CONTROLLER_URL:-tcp://host.docker.internal:1234/Iris}
     depends_on:
       - ardupilot-sitl
 

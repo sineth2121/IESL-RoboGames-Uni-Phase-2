@@ -20,13 +20,58 @@ if [ ! -f .env ]; then
     fi
 fi
 
+# Ensure WEBOTS_HOME points to a valid installation with controller Python libs.
+resolve_webots_home() {
+    local candidates=()
+
+    if [ -n "$WEBOTS_HOME" ]; then
+        candidates+=("$WEBOTS_HOME")
+    fi
+
+    candidates+=(
+        "/usr/local/webots"
+        "/snap/webots/current/usr/share/webots"
+        "/usr/share/webots"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate/lib/controller/python/controller/__init__.py" ] || [ -d "$candidate/lib/controller/python/controller" ]; then
+            export WEBOTS_HOME="$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+if ! resolve_webots_home; then
+    echo "❌ Error: Could not find a valid Webots controller library path."
+    echo "   Expected to find: <WEBOTS_HOME>/lib/controller/python/controller"
+    echo "   Please set WEBOTS_HOME in .env to your Webots install root."
+    echo "   Example (Snap): WEBOTS_HOME=/snap/webots/current/usr/share/webots"
+    echo "   Example (Standard): WEBOTS_HOME=/usr/local/webots"
+    exit 1
+fi
+
+# Pick a sensible tmp path for Snap installs when not explicitly provided.
+if [ -z "$WEBOTS_TMP_PATH" ] && [[ "$WEBOTS_HOME" == /snap/webots/* ]]; then
+    export WEBOTS_TMP_PATH="$HOME/snap/webots/common/tmp/webots"
+fi
+
+mkdir -p "${WEBOTS_TMP_PATH:-/tmp/webots}"
+echo "ℹ Using WEBOTS_HOME=$WEBOTS_HOME"
+
 # Start containers with the appropriate tool
 if command -v podman-compose &> /dev/null; then
+    # Podman uses host.containers.internal for host access from containers.
+    export WEBOTS_CONTROLLER_URL="${WEBOTS_CONTROLLER_URL:-tcp://host.containers.internal:1234/Iris}"
     echo "⬇️  Pulling latest images with podman-compose..."
     podman-compose pull
     echo "📦 Starting with podman-compose..."
     podman-compose up -d
 elif command -v docker &> /dev/null; then
+    # Docker uses host.docker.internal for host access from containers.
+    export WEBOTS_CONTROLLER_URL="${WEBOTS_CONTROLLER_URL:-tcp://host.docker.internal:1234/Iris}"
     echo "⬇️  Pulling latest images with docker compose..."
     docker compose pull
     echo "🐳 Starting with docker compose..."
@@ -78,7 +123,7 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "  1. Open Webots and load the world:"
-echo "     webots Webots/worlds/iris_modified.wbt"
+echo "     webots Webots/worlds/iris_Task_2.wbt"
 echo "     Then press ▶ (Play)"
 echo ""
 echo "  2. In another terminal, run the control script, for example:"
